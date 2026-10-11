@@ -15,6 +15,7 @@ Auth: set API_KEY and send it as header  X-API-Key.
 import asyncio
 import hmac
 import logging
+import os
 import time
 
 from quart import Quart, Response, jsonify, request
@@ -79,7 +80,7 @@ async def ping():
 
 @app.route("/health")
 async def health():
-    return jsonify(status="ok", browser=browser.is_up(), driveseed_session_loaded=driveseed.session_loaded())
+    return jsonify(status="ok", version="getlink-open-v3", browser=browser.is_up(), driveseed_session_loaded=driveseed.session_loaded())
 
 
 # ----------------------------------------------------------------- service 1: /scrape
@@ -98,7 +99,7 @@ async def scrape_api():
 # ----------------------------------------------------------------- service 2: /getlink
 @app.route("/getlink", methods=["GET", "POST"])
 async def get_link():
-    err = _key_error(required=False)
+    err = _key_error(required=False) if os.environ.get("GETLINK_REQUIRES_KEY", "0") == "1" else None
     if err:
         return err
 
