@@ -1,0 +1,182 @@
+[
+  {
+    "name": "_GRECAPTCHA",
+    "value": "09AKhCRwjLB0kopTo7wdhu99-fpvGhREljqUrtTjwca5jKt7nIjDI41MQoUK-vvo0TyWilr7GrGGaM3Y-nHpUMAYo",
+    "domain": "www.google.com",
+    "path": "/recaptcha",
+    "expires": 1807253952.780606,
+    "httpOnly": true,
+    "secure": true,
+    "sameSite": "None"
+  },
+  {
+    "name": "GL_UI4",
+    "value": "eJw9jcFOhDAYhIFCQV1IJuEBfARwBdej8SE8ktK%2F7FYp3bSVjW9v48HTfJnM5EuSJGtrpDs%2FgH2LAY8nMYxEsn%2BhgeRwHJdT%2F6pIyuPTGJtlxJ32UxDzqkKOyhvhwhT2HMXsxEY1CmNJrTXK2dmbV65lyDdhFPj7xdmYhRGf1oH1w3NkvUVOO2TWt6ypUH7ojeKxuUfWd82BJ3i4riIs1plJE09RnJ0ghfQNlRRBna37QUnKfwV7BexK0%2F%2F%2Bz8tufQdOatcyym24KPcLltpDMA%3D%3D",
+    "domain": "ds.recrampwiped.com",
+    "path": "/",
+    "expires": 1791788315.941931,
+    "httpOnly": false,
+    "secure": true,
+    "sameSite": "None"
+  },
+  {
+    "name": "_ga",
+    "value": "GA1.1.883923318.1791701918",
+    "domain": ".driveseed.org",
+    "path": "/",
+    "expires": 1826262750.256717,
+    "httpOnly": false,
+    "secure": false,
+    "sameSite": "Lax"
+  },
+  {
+    "name": "ads-counter-95233",
+    "value": "0-1",
+    "domain": "driveseed.org",
+    "path": "/",
+    "expires": 1791723517,
+    "httpOnly": false,
+    "secure": true,
+    "sameSite": "None"
+  },
+  {
+    "name": "ID",
+    "value": "0803cc501c034530f2d218cd08eaadc1",
+    "domain": "my.rtmark.net",
+    "path": "/",
+    "expires": 1823237925.14641,
+    "httpOnly": false,
+    "secure": true,
+    "sameSite": "None"
+  },
+  {
+    "name": "OAID",
+    "value": "0803cc501c034530f2d218cd08eaadc1",
+    "domain": "luugy.com",
+    "path": "/",
+    "expires": 1823237979.183532,
+    "httpOnly": false,
+    "secure": true,
+    "sameSite": "None"
+  },
+  {
+    "name": "syncedCookie",
+    "value": "true",
+    "domain": "luugy.com",
+    "path": "/",
+    "expires": 1792306779.183707,
+    "httpOnly": false,
+    "secure": true,
+    "sameSite": "None"
+  },
+  {
+    "name": "OAID",
+    "value": "0083cc8088424557f685ac8e7b45c954",
+    "domain": "tmll7.com",
+    "path": "/",
+    "expires": 1823237931.200378,
+    "httpOnly": false,
+    "secure": true,
+    "sameSite": "None"
+  },
+  {
+    "name": "oaidts",
+    "value": "1791701930",
+    "domain": "tmll7.com",
+    "path": "/",
+    "expires": 1823237931.200613,
+    "httpOnly": false,
+    "secure": true,
+    "sameSite": "None"
+  },
+  {
+    "name": "g_state",
+    "value": "{\"i_l\":0,\"i_ll\":1791701933838,\"i_b\":\"VUOymke1aLkDR+aBo514NNkxnePz/TTzjHRXLuyxlHI\",\"i_e\":{\"enable_itp_optimization\":24},\"i_et\":1791701933838}",
+    "domain": "driveseed.org",
+    "path": "/",
+    "expires": 1807253933,
+    "httpOnly": false,
+    "secure": false,
+    "sameSite": "Lax"
+  },
+  {
+    "name": "MD",
+    "value": "dFpBQU0xYzg4TlV0WU1KM3MxVU5iSEx3anZFRCtPcXJIbTdETnVvTktrSDkwb2RSd1FPNEZOZnFia1k2NW9YdlVIMEcraXhqTWpRcmd3M3RHRVJvZEE9PQ%3D%3D",
+    "domain": "driveseed.org",
+    "path": "/",
+    "expires": 1823237965.478924,
+    "httpOnly": false,
+    "secure": true,
+    "sameSite": "Lax"
+  },
+  {
+    "name": "_token",
+    "value": "WjRWTWJPcjN6UVhheUVWeEJIQnc4emhHL1NyQmFkMVJORGowdGJxWW9Lb2hYcytSSGR6UE5xcEhjR2kwczVNS3JwU05WNkVGQy92RTBZdER3cjl4K1E9PQ%3D%3D",
+    "domain": "driveseed.org",
+    "path": "/",
+    "expires": 1794380365.479024,
+    "httpOnly": false,
+    "secure": true,
+    "sameSite": "Lax"
+  },
+  {
+    "name": "oaidts",
+    "value": "1791701978",
+    "domain": "luugy.com",
+    "path": "/",
+    "expires": 1823237979.183652,
+    "httpOnly": false,
+    "secure": true,
+    "sameSite": "None"
+  },
+  {
+    "name": "rauid",
+    "value": "5wn9T0TWkLCvH5151I89S3",
+    "domain": "uidsync.net",
+    "path": "/",
+    "expires": 1823237982.331869,
+    "httpOnly": false,
+    "secure": true,
+    "sameSite": "None"
+  },
+  {
+    "name": "__Secure-STRP",
+    "value": "ABNhA6icJd7qmjysyfyNM8UqsIN8MybKUXqWu9mQsG4df4vSm9IMbWN9TVy_BzFNKPWffYCTPqCQwzzQErhu5HPtLN9gPtch674Q",
+    "domain": ".google.com",
+    "path": "/",
+    "expires": 1791703049.64145,
+    "httpOnly": false,
+    "secure": true,
+    "sameSite": "Strict"
+  },
+  {
+    "name": "SEARCH_SAMESITE",
+    "value": "CgQIgaIB",
+    "domain": ".google.com",
+    "path": "/",
+    "expires": 1807254749.641595,
+    "httpOnly": false,
+    "secure": false,
+    "sameSite": "Strict"
+  },
+  {
+    "name": "NID",
+    "value": "Cu8BCAESoQEBOxGDSLw2UzlOd3cUFboJ5OHMlFn3ULzj7kGfddmQMOtFkM7E-Avra-tygcduKqBaa1xd2aRabGuHObrlWB7rvPJl2TeKQYSBW_wL620kkJCNAVUcnpo8pVR5b_-ztnkEuhTdiufUkbwfkmdTcmfZBsN6kqLScO702k6sCLuQXXQoO9dQQHurAIA_wuSoTlReQ7RtO73WL10zbI23D62zASgBMkUB0qwHz4UaLQi4Vl1BkyNwY3df10sqKhidiOfhI6HR0QuA3YFSo7KMvsD3OfJOib7Ho8YPtyTNRwlcqIKuzhw7rb3j8QY",
+    "domain": ".google.com",
+    "path": "/",
+    "expires": 1807513949.641647,
+    "httpOnly": true,
+    "secure": true,
+    "sameSite": "None"
+  },
+  {
+    "name": "_ga_X7YH5Q7J95",
+    "value": "GS2.1.s1791701917$o1$g1$t1791702758$j52$l0$h0",
+    "domain": ".driveseed.org",
+    "path": "/",
+    "expires": 1826262758.097367,
+    "httpOnly": false,
+    "secure": false,
+    "sameSite": "Lax"
+  }
+]
