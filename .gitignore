@@ -1,0 +1,9 @@
+__pycache__/
+*.pyc
+.env
+debug/
+# driveseed login session: NEVER commit these
+state.json
+meta.json
+cookies.json
+data.json
