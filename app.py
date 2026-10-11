@@ -35,7 +35,7 @@ driveseed.load_session()
 
 
 # ----------------------------------------------------------------- auth
-def _key_error(required, allow_query=False):
+def _key_error(required, allow_query=True):
     """Return a (response, status) tuple if the request must be rejected, else None."""
     if not config.API_KEY:
         if required:
@@ -45,6 +45,14 @@ def _key_error(required, allow_query=False):
     if not hmac.compare_digest(supplied.encode(), config.API_KEY.encode()):
         return jsonify(error="Unauthorized"), 401
     return None
+
+
+async def _get_url():
+    """url from ?url= or from a JSON body {"url": "..."}"""
+    url = request.args.get("url")
+    if not url:
+        url = ((await request.get_json(silent=True)) or {}).get("url")
+    return url or ""
 
 
 # ----------------------------------------------------------------- lifecycle
@@ -75,12 +83,12 @@ async def health():
 
 
 # ----------------------------------------------------------------- service 1: /scrape
-@app.route("/scrape", methods=["GET"])
+@app.route("/scrape", methods=["GET", "POST"])
 async def scrape_api():
     err = _key_error(required=False) if config.SCRAPE_REQUIRES_KEY else None
     if err:
         return err
-    url = (request.args.get("url") or "").strip()
+    url = (await _get_url()).strip()
     problem = validate_url(url, config.SCRAPE_ALLOWED_HOSTS)
     if problem:
         return jsonify(error=problem), 400
@@ -88,13 +96,13 @@ async def scrape_api():
 
 
 # ----------------------------------------------------------------- service 2: /getlink
-@app.route("/getlink")
+@app.route("/getlink", methods=["GET", "POST"])
 async def get_link():
     err = _key_error(required=False)
     if err:
         return err
 
-    start_url = (request.args.get("url") or "").strip()
+    start_url = (await _get_url()).strip()
     problem = validate_url(start_url, config.GETLINK_ALLOWED_HOSTS)
     if problem:
         return jsonify(error=problem), 400
@@ -121,11 +129,11 @@ async def get_link():
 # ----------------------------------------------------------------- service 3: /api/link
 @app.route("/api/link", methods=["GET", "POST"])
 async def api_link():
-    err = _key_error(required=True, allow_query=True)
+    err = _key_error(required=True)
     if err:
         return err
 
-    url = request.args.get("url") or ((await request.get_json(silent=True)) or {}).get("url")
+    url = await _get_url()
     if not driveseed.url_allowed(url):
         return jsonify(error=f"url must be https and on one of: {', '.join(sorted(config.DRIVESEED_ALLOWED_HOSTS))}"), 400
 
@@ -142,7 +150,7 @@ async def api_link():
 
 @app.route("/admin/session", methods=["POST"])
 async def admin_session():
-    err = _key_error(required=True, allow_query=True)
+    err = _key_error(required=True)
     if err:
         return err
     body = (await request.get_json(silent=True)) or {}
@@ -151,6 +159,25 @@ async def admin_session():
     except Exception as e:
         return jsonify(error=str(e)), 400
     return jsonify(status="session saved")
+
+
+@app.route("/docs")
+async def docs():
+    base = request.host_url.rstrip("/")
+    return jsonify({
+        "auth": "send your API key as header  X-API-Key: <key>   OR add  &key=<key>  to the link",
+        "scrape (modpro page -> episodes + links)": {
+            "browser_link": f"{base}/scrape?url=<modpro page>&key=<key>",
+            "method": "GET or POST (JSON body {\"url\": \"...\"})"},
+        "getlink (shortener link, e.g. en.thenaukriadda.in/?sid=... -> file links)": {
+            "browser_link": f"{base}/getlink?url=<shortener link>&key=<key>",
+            "method": "GET or POST (JSON body {\"url\": \"...\"})",
+            "note": "takes 20-60 seconds"},
+        "api/link (driveseed.org/file/... -> google drive link)": {
+            "browser_link": f"{base}/api/link?url=<https://driveseed.org/file/...>&key=<key>",
+            "method": "GET or POST (JSON body {\"url\": \"...\"})",
+            "note": "needs the driveseed login session (state.json) loaded"},
+    })
 
 
 # ----------------------------------------------------------------- test page
