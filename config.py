@@ -11,6 +11,8 @@ PORT = int(os.environ.get("PORT", 8080))
 CORS_ORIGIN = os.environ.get("CORS_ORIGIN", "*")
 API_KEY = os.environ.get("API_KEY", "").strip()          # sent as header X-API-Key
 SCRAPE_REQUIRES_KEY = os.environ.get("SCRAPE_REQUIRES_KEY", "0") == "1"
+# /getlink is open by default (like the old standalone service); set GETLINK_REQUIRES_KEY=1 to protect it
+GETLINK_REQUIRES_KEY = os.environ.get("GETLINK_REQUIRES_KEY", "0") == "1"
 
 # ---- shared browser ----------------------------------------------------------
 # Max browser jobs (getlink + driveseed) running at the same time.
