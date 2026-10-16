@@ -4,6 +4,7 @@ Drives the shared headless Chromium through the shortener hops, then collects th
 download links from the final file page. Logic is unchanged from the standalone service.
 """
 import asyncio
+import json
 import logging
 import os
 import re
@@ -42,16 +43,19 @@ UA = (
 BTN_SELECTOR = "form[id^='lp-'] button[type='submit'], button.lp-btn"
 STEP_LABELS = ["Go to download", "Click here to continue", "Generate link"]
 RETRY_AFTER = 8 if TIME_SPEEDUP == 1 else 2  # seconds before retrying a button that may be countdown-gated
-RETRY_BY_LABEL = {"Generate link": 6}  # clicking this again mid-countdown can restart it
+RETRY_BY_LABEL = {"Generate link": 6 if TIME_SPEEDUP == 1 else 1.5}  # clicking this again mid-countdown can restart it
 SUBMIT_LP_FORM = """() => {
     const f = document.getElementById('lp-land') || document.querySelector("form[id^='lp-']");
     if (!f) return null;
     try { HTMLFormElement.prototype.submit.call(f); } catch (e) { return null; }
     return f.id || "(form)";
 }"""
-NUDGE_AFTER = 0.3  # seconds on the redirect page before submitting its form ourselves
+NUDGE_AFTER = 0.1  # seconds on the redirect page before submitting its form ourselves
 POLL = 0.05      # seconds between page polls
-CLICK_PAUSE = 0.1  # pause after a click
+CLICK_PAUSE = 0.03  # pause after a click
+BLOCK_CSS = config.BLOCK_CSS
+TRACE = config.TRACE
+VARIANT_RETRY_SEC = int(os.environ.get("GETLINK_VARIANT_RETRY_SEC", 0))  # 0 = never auto-skip
 
 # Variants of the final file page: key -> (path template, CSS selector for the download link)
 VARIANTS = {
@@ -90,7 +94,10 @@ THIRD_PARTY_TYPES = {"script", "iframe", "xhr", "fetch", "ping", "websocket", "e
 def make_router(start_base: str, strict: bool):
     async def route_handler(route):
         req = route.request
-        if req.resource_type in ("image", "media", "font"):
+        if req.resource_type in ("image", "media", "font", "manifest"):
+            await route.abort()
+            return
+        if strict and BLOCK_CSS and req.resource_type == "stylesheet":
             await route.abort()
             return
         host = (urllib.parse.urlparse(req.url).hostname or "").lower()
@@ -144,6 +151,47 @@ async def new_context(shortener_host: str = "", strict: bool = False):
     return ctx
 
 
+
+_cookie_cache = (None, [])
+
+
+def _driveseed_cookies():
+    """driveseed.org cookies from the same state.json /api/link uses (None-safe, cached by mtime)."""
+    global _cookie_cache
+    path = os.path.join(config.SESSION_DIR, "state.json")
+    try:
+        mtime = os.path.getmtime(path)
+        if _cookie_cache[0] == mtime:
+            return _cookie_cache[1]
+        with open(path, encoding="utf-8") as f:
+            state = json.load(f)
+    except Exception:
+        return []
+    bases = {base_domain(h) for h in config.DRIVESEED_ALLOWED_HOSTS}
+    keys = ("name", "value", "domain", "path", "expires", "httpOnly", "secure", "sameSite")
+    out = [{k: c[k] for k in keys if k in c} for c in state.get("cookies", [])
+           if base_domain((c.get("domain") or "").lstrip(".")) in bases]
+    _cookie_cache = (mtime, out)
+    return out
+
+
+def attach_trace(page):
+    """GETLINK_TRACE=1: log every document/xhr/fetch response, to see what plain HTTP would need."""
+    def on_response(r):
+        try:
+            req = r.request
+            if req.resource_type in ("document", "xhr", "fetch"):
+                body = ""
+                if req.method != "GET":
+                    try:
+                        body = " body=" + (req.post_data or "")[:200]
+                    except Exception:
+                        body = " body=<binary>"
+                log.info("trace %s %s %s %s%s", req.resource_type, req.method, r.status, r.url[:160], body)
+        except Exception:
+            pass
+    page.on("response", on_response)
+
 # --------------------------------------------------------------------------
 # Shortener hops
 # --------------------------------------------------------------------------
@@ -170,6 +218,14 @@ async def advance_one_hop(page, hop: int = 0) -> bool:
     loop = asyncio.get_event_loop()
     deadline = loop.time() + HOP_TIMEOUT
     start_url = page.url
+    # Don't click before the page's scripts have attached their handlers: with stylesheets
+    # blocked the button exists almost immediately, and an early click is silently ignored
+    # (that cost a 6s retry). DOMContentLoaded is the point where those handlers are ready.
+    if hop > 0:
+        try:
+            await page.wait_for_load_state("domcontentloaded", timeout=5000)
+        except PlaywrightError:
+            pass
     clicked = {}      # label -> time of last click
     idle_since = None
     last_nudge = None
@@ -300,13 +356,47 @@ async def run_hops(page, start_host: str):
 # --------------------------------------------------------------------------
 # Final file page
 # --------------------------------------------------------------------------
+def page_summary(html, soup):
+    """One-line description of a page that did not contain the wanted link (for the log)."""
+    title = soup.title.get_text(strip=True)[:80] if soup.title else ""
+    low = html.lower()
+    flags = [k for k in ("turnstile", "captcha", "recaptcha", "cloudflare", "login", "logout") if k in low]
+    return "title=%r forms=%d flags=%s text=%r" % (
+        title, len(soup.find_all("form")), flags, soup.get_text(" ", strip=True)[:200])
+
+
+def _session_headers():
+    """Same User-Agent the driveseed login was captured with (meta.json), if we use that login."""
+    if not config.USE_DRIVESEED_SESSION:
+        return {}
+    try:
+        with open(os.path.join(config.SESSION_DIR, "meta.json"), encoding="utf-8") as f:
+            ua = json.load(f).get("user_agent")
+        return {"User-Agent": ua} if ua else {}
+    except Exception:
+        return {}
+
+
+async def _session_check(ctx, file_url):
+    """Is the driveseed login accepted?  (logs the answer; does not delay the variants)"""
+    try:
+        resp = await ctx.request.get(file_url, timeout=8000, headers=_session_headers())
+        text = await resp.text()
+        logged = 'href="/logout"' in text or "href='/logout'" in text
+        log.info("variants: session check on %s -> status %s, logged_in=%s", file_url, resp.status, logged)
+        return logged
+    except Exception as e:
+        log.info("variants: session check failed: %s", str(e).splitlines()[0])
+        return None
+
+
 async def fetch_variant_http(context, url, selector):
     """
     Fast path: plain HTTP GET through the browser context (same proxy, cookies and UA),
     then parse the HTML. No page load, no rendering. Returns a link or None.
     """
     try:
-        resp = await context.request.get(url, timeout=8000, headers={"Referer": url})
+        resp = await context.request.get(url, timeout=8000, headers={"Referer": url, **_session_headers()})
         if not resp.ok:
             log.info("variant http %s -> status %s", url, resp.status)
             return None
@@ -315,8 +405,8 @@ async def fetch_variant_http(context, url, selector):
         a = soup.select_one(selector)
         href = a.get("href") if a else None
         if not href:
-            log.info("variant http %s -> 200 but selector not in HTML (%d bytes, %d <a> tags)",
-                     url, len(html), len(soup.find_all("a")))
+            log.info("variant http %s -> 200 but selector not in HTML (%d bytes, %d <a> tags) %s",
+                     url, len(html), len(soup.find_all("a")), page_summary(html, soup))
             if DEBUG_DIR:
                 os.makedirs(DEBUG_DIR, exist_ok=True)
                 name = re.sub(r"[^A-Za-z0-9]+", "_", urllib.parse.urlparse(url).path + "_" + urllib.parse.urlparse(url).query)
@@ -399,13 +489,69 @@ async def fetch_variant(context, key, url, selector):
             await asyncio.gather(*pending, return_exceptions=True)
 
 
+async def _http_follow_file(ctx, url, referer):
+    """Plain HTTP GET of the /r?key=... hop: if it is a server redirect we get /file/<id> at once."""
+    try:
+        resp = await ctx.request.get(url, headers={"Referer": referer}, timeout=6000)
+        if "/file/" in resp.url:
+            return resp.url
+    except Exception as e:
+        log.debug("http /r follow failed: %s", str(e).splitlines()[0])
+    return None
+
+
+async def _wait_file_url(page, ctx, referer):
+    """Return the /file/<id> URL (or None): whichever is first, HTTP follow or the browser."""
+    r_url = page.url
+    browser_task = asyncio.ensure_future(wait_until_left(page, lambda u: "/file/" in u, timeout=12.0))
+    http_task = asyncio.ensure_future(_http_follow_file(ctx, r_url, referer))
+    pending = {browser_task, http_task}
+    found = None
+    try:
+        while pending and not found:
+            done, pending = await asyncio.wait(pending, return_when=asyncio.FIRST_COMPLETED)
+            for t in done:
+                try:
+                    res = t.result()
+                except Exception:
+                    continue
+                if t is http_task and res:
+                    found = res
+                elif t is browser_task and res:
+                    found = page.url
+    finally:
+        for t in pending:
+            t.cancel()
+        if pending:
+            await asyncio.gather(*pending, return_exceptions=True)
+    return found
+
+
+_variants_blind_until = 0.0   # after an all-empty variant stage, skip it until this time
+
+
 async def _resolve(start_url: str, strict: bool):
+    global _variants_blind_until
     async with browser.sem:
+        t_start = time.perf_counter()
+        tm = {}
+
+        def mark(name):
+            nonlocal t_start
+            now = time.perf_counter()
+            tm[name] = int((now - t_start) * 1000)
+            t_start = now
+
         start_host = urllib.parse.urlparse(start_url).hostname or ""
         ctx = await new_context(start_host, strict)
         page = await ctx.new_page()
+        if TRACE:
+            attach_trace(page)
+        mark("context")
         try:
-            await page.goto(start_url, wait_until="domcontentloaded", timeout=NAV_TIMEOUT)
+            # "commit": hop polling below copes with a page that is still loading
+            await page.goto(start_url, wait_until="commit", timeout=NAV_TIMEOUT)
+            mark("first_nav")
 
             final_url = await run_hops(page, start_host)
             if not final_url:
@@ -415,17 +561,20 @@ async def _resolve(start_url: str, strict: bool):
                     "debug_title": await page.title(),
                 }, 504
 
+            mark("hops")
             # Leaving the shortener can land on an intermediate "/r?key=..." hop of the file
-            # host; wait for it to finish redirecting to the real /file/<id> page.
-            if urllib.parse.urlparse(page.url).path.rstrip("/") == "/r":
-                if not await wait_until_left(page, lambda u: "/file/" in u, timeout=12.0):
+            # host; get the real /file/<id> URL (HTTP follow and browser race each other).
+            final_url = page.url
+            if urllib.parse.urlparse(final_url).path.rstrip("/") == "/r":
+                found = await _wait_file_url(page, ctx, f"https://{start_host}/")
+                if not found:
                     await dump(page, "r_redirect_stuck")
                     return {
                         "error": "File redirect did not finish",
                         "debug_url": page.url,
                     }, 504
-
-            final_url = page.url
+                final_url = found
+            mark("file_redirect")
             parsed = urllib.parse.urlparse(final_url)
             segments = [s for s in parsed.path.split("/") if s]
             file_id = segments[-1] if segments else ""
@@ -438,24 +587,69 @@ async def _resolve(start_url: str, strict: bool):
             if not file_id:
                 return {"final_url": final_url, "file_id": None, "download_links": {}}, 200
 
+            if config.SKIP_VARIANTS or time.time() < _variants_blind_until:
+                log.info("getlink stage timings ms: %s (variants skipped)", tm)
+                return {"final_url": final_url, "file_id": file_id, "download_links": {},
+                        "variants_skipped": True, "timings_ms": tm}, 200
+
+            # the file pages need the driveseed login (without it they only show a "Login" link)
+            if config.USE_DRIVESEED_SESSION and base_domain(parsed.hostname or "") in \
+                    {base_domain(h) for h in config.DRIVESEED_ALLOWED_HOSTS}:
+                cookies = _driveseed_cookies()
+                if cookies:
+                    await ctx.add_cookies(cookies)
+                    log.info("variants: using %d driveseed session cookies", len(cookies))
+                else:
+                    log.warning("variants: no driveseed session (state.json) -> file pages will show 'Login'")
+
+            check_task = None
+            if config.USE_DRIVESEED_SESSION and base_domain(parsed.hostname or "") in \
+                    {base_domain(h) for h in config.DRIVESEED_ALLOWED_HOSTS}:
+                check_task = asyncio.ensure_future(_session_check(ctx, final_url))
+
             tasks = [
                 fetch_variant(ctx, key, origin + path.format(id=file_id), selector)
                 for key, (path, selector) in VARIANTS.items()
                 if not ENABLED_VARIANTS or key in ENABLED_VARIANTS
             ]
             results = dict(await asyncio.gather(*tasks))
-            return {"final_url": final_url, "file_id": file_id, "download_links": results}, 200
+            mark("variants")
+            if check_task:
+                try:
+                    await asyncio.wait_for(check_task, timeout=3)
+                except Exception:
+                    check_task.cancel()
+            if not any(results.values()) and VARIANT_RETRY_SEC > 0:
+                _variants_blind_until = time.time() + VARIANT_RETRY_SEC
+                log.warning("no variant returned a link; skipping the variant stage for the next %ds "
+                            "(file pages probably need a valid login/captcha)", VARIANT_RETRY_SEC)
+            log.info("getlink stage timings ms: %s", tm)
+            return {"final_url": final_url, "file_id": file_id, "download_links": results,
+                    "timings_ms": tm}, 200
         finally:
             await ctx.close()
 
 
 
-async def resolve(start_url: str):
+async def _resolve_with_retry(start_url: str):
     body, status = await _resolve(start_url, BLOCK_THIRD_PARTY)
     if BLOCK_THIRD_PARTY and status == 504 and "Hop chain" in str(body.get("error", "")):
-        log.warning("hop chain failed with third-party blocking; retrying without it")
+        log.warning("hop chain failed with third-party blocking/CSS skipping; retrying without it")
         body, status = await _resolve(start_url, False)
     return body, status
+
+
+_inflight = {}   # url -> Task: the same link asked twice at once is resolved once
+
+
+async def resolve(start_url: str):
+    task = _inflight.get(start_url)
+    if task is None:
+        task = asyncio.ensure_future(_resolve_with_retry(start_url))
+        _inflight[start_url] = task
+        task.add_done_callback(lambda t, u=start_url: (_inflight.pop(u, None),
+                                                       t.cancelled() or t.exception()))
+    return await asyncio.shield(task)
 
 
 async def startup_check():
@@ -484,7 +678,8 @@ def cache_get(url):
 
 
 def cache_put(url, body):
-    if CACHE_TTL > 0 and any((body.get("download_links") or {}).values()):
+    if CACHE_TTL > 0 and (any((body.get("download_links") or {}).values())
+                          or (config.SKIP_VARIANTS and body.get("file_id"))):
         _cache[url] = (time.time() + CACHE_TTL, body)
         if len(_cache) > 200:   # keep it small
             _cache.pop(next(iter(_cache)))
