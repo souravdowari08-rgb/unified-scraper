@@ -65,6 +65,7 @@ async def startup():
     except Exception as e:  # /scrape still works; browser retries on the next request
         log.warning("browser warm-up failed (will retry on demand): %s", e)
     await linkpilot.startup_check()
+    asyncio.create_task(driveseed.warmup())     # open HTTP connection + learn the fast-path recipe
 
 
 @app.after_serving
