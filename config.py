@@ -30,6 +30,14 @@ CACHE_TTL = int(os.environ.get("CACHE_TTL", 900))       # 0 = off
 BLOCK_THIRD_PARTY = os.environ.get("BLOCK_THIRD_PARTY", "1") != "0"
 ENABLED_VARIANTS = {v.strip() for v in os.environ.get("VARIANTS", "").split(",") if v.strip()}
 TIME_SPEEDUP = max(1, int(os.environ.get("TIME_SPEEDUP", 25)))
+# strict mode also skips stylesheets (faster page loads); the automatic retry runs without it
+BLOCK_CSS = os.environ.get("GETLINK_BLOCK_CSS", "1") != "0"
+# send the driveseed login cookies (same state.json as /api/link) when fetching the file-page variants
+USE_DRIVESEED_SESSION = os.environ.get("GETLINK_USE_SESSION", "1") != "0"
+# log every document/xhr/fetch response of the hop chain (to see what could be replayed over plain HTTP)
+TRACE = os.environ.get("GETLINK_TRACE", "0") == "1"
+# 1 = stop at the final driveseed file URL (skip the zfile/wfile variant stage, ~3s)
+SKIP_VARIANTS = os.environ.get("GETLINK_SKIP_VARIANTS", "0") == "1"
 
 # ---- /api/link (driveseed -> google drive) ------------------------------------
 DRIVESEED_ALLOWED_HOSTS = _hosts("DRIVESEED_ALLOWED_HOSTS", "driveseed.org")
